@@ -78,7 +78,7 @@ class DbTransfer(object):
         conn = cymysql.connect(host=Config.MYSQL_HOST, port=Config.MYSQL_PORT, user=Config.MYSQL_USER,
                                passwd=Config.MYSQL_PASS, db=Config.MYSQL_DB, charset='utf8')
         cur = conn.cursor()
-        cur.execute("SELECT port, u, d, transfer_enable, passwd, switch, enable FROM user")
+        cur.execute("SELECT port, u, d, transfer_enable, passwd, switch, enable, vip_type FROM user")
         rows = []
         for r in cur.fetchall():
             rows.append(list(r))
@@ -88,17 +88,21 @@ class DbTransfer(object):
 
     @staticmethod
     def del_server_out_of_bound_safe(rows):
-    #停止超流量的服务
-    #启动没超流量的服务
+        #增加了检查用户类型
+        #增加了检用服务器类型，只有服务器类型与当用vip类型一致才启动服务
+        #停止超流量的服务
+        #启动没超流量的服务
         for row in rows:
+
             if ServerPool.get_instance().server_is_run(row[0]) > 0:
-                if row[1] + row[2] >= row[3] or row[6] != 1:
+                if int(row[7]) != Config.SERVER_TYPE or ( (row[7] > 1 and row[1] + row[2] >= row[3] ) or row[6] != 1):
                     logging.info('db stop server at port [%s]' % (row[0]))
                     ServerPool.get_instance().del_server(row[0])
             elif ServerPool.get_instance().server_run_status(row[0]) is False:
-                if row[5] == 1 and row[6] == 1 and  row[1] + row[2] < row[3]:
+                if int(row[7]) == Config.SERVER_TYPE and ( row[5] == 1 and row[6] == 1 and ( row[1] + row[2] < row[3] and row[7] > 1)):
                     logging.info('db start server at port [%s] pass [%s]' % (row[0], row[4]))
                     ServerPool.get_instance().new_server(row[0], row[4])
+
     @staticmethod
     def thread_db():
         import socket
